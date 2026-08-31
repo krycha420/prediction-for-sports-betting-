@@ -114,6 +114,39 @@ else:
     df = games_to_dataframe(games)
     df.to_csv(CSV_PATH, index=False)
 
+def build_training_table(team_df, window = 10):
+    feature_cols = ["id", "team", "opponent",
+                    "is_home", f"avg_points_scored_last{window}",
+                    f"avg_points_allowed_last{window}",
+                    f"win_rate_last{window}",
+                    "won"
+                    ]
+    home = team_df[team_df["is_home"]==True][feature_cols]
+    away = team_df[team_df["is_home"] == False][feature_cols]
+    merged = home.merge(away, on= "id", suffixes= ("_home", "_away"))
+    return merged
+
+def finalize_training_table(training_df):
+    training_df = training_df.copy()
+    training_df["home_win"] = training_df["won_home"].astype(int)
+
+    training_df = training_df.drop(columns = [
+        "is_home_home", "is_home_away", "won_home", "won_away"
+    ])
+
+    training_df = training_df.dropna()
+
+    return training_df
+
 to_team = to_team_perspective(df)
 to_team = add_rolling_features(to_team, window = 10)
 print(to_team[["team", "date", "avg_points_scored_last10", "avg_points_allowed_last10", "win_rate_last10"]].head(20))
+
+training_df = build_training_table(to_team, window=10)
+print(training_df.head())
+print(training_df.columns.tolist())
+
+final_df = finalize_training_table(training_df)
+print(f"Przed dropna: {len(training_df)}, po dropna: {len(final_df)}")
+print(final_df.head())
+print(final_df.columns.tolist())
