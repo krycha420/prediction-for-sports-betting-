@@ -1,6 +1,7 @@
 import requests
 import time
 import json
+import pandas as pd
 
 BASE_URL = "https://api.balldontlie.io/v1"
 API_KEY = "aefebbe9-c636-426f-9a3f-b0a16d71d38c"
@@ -52,5 +53,37 @@ def flatten_game(game):
         "visitor_score": game["visitor_team_score"],
     }
 
-def game_to_dataframe(games):
-    for game in games
+def games_to_dataframe(games):
+    data = []
+    for game in games:
+        flattened_game = flatten_game(game)
+        data.append(flattened_game)
+    return pd.DataFrame(data)
+def to_team_perspective(df):
+    home_rows = df.copy()
+    home_rows = home_rows.rename(columns = {
+        "home_team": "team",
+        "visitor_team": "opponent",
+        "home_score": "points_scored",
+        "visitor_score": "points_allowed",
+    })
+    home_rows["is_home"] = True
+    home_rows["won"] = home_rows["points_scored"]>home_rows["points_allowed"]
+    visitor_rows = df.copy()
+    visitor_rows = visitor_rows.rename(columns={
+        "home_team": "opponent",
+        "visitor_team": "team",
+        "home_score": "points_allowed",
+        "visitor_score": "points_scored",
+    })
+    visitor_rows["is_home"] = False
+    visitor_rows["won"] = visitor_rows["points_scored"] > visitor_rows["points_allowed"]
+    combined = pd.concat([home_rows, visitor_rows], ignore_index=True)
+    combined = combined.sort_values("date").reset_index(drop=True)
+    return combined
+
+df = games_to_dataframe(games)
+to_team = to_team_perspective(df)
+#df.to_csv("nba_games_2023.csv", index = False)
+print(to_team.head(10))
+print(f"Saved {len(df)} rows to nba_games_2023.csv")
