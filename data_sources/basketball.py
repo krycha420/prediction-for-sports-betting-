@@ -2,9 +2,12 @@ import requests
 import time
 import json
 import pandas as pd
+import os
 
 BASE_URL = "https://api.balldontlie.io/v1"
 API_KEY = "aefebbe9-c636-426f-9a3f-b0a16d71d38c"
+CSV_PATH = "nba_games_2023.csv"
+
 
 
 def get_games(season: int, cursor: int = None):
@@ -37,9 +40,8 @@ def fetch_all_games(season: int):
             break
 
     return all_games
-games = fetch_all_games(2023)
-print(f"\nŁĄCZNIE: {len(games)} meczów")
-print(json.dumps(games[0], indent=2))
+
+
 
 def flatten_game(game):
     return {
@@ -82,8 +84,36 @@ def to_team_perspective(df):
     combined = combined.sort_values("date").reset_index(drop=True)
     return combined
 
-df = games_to_dataframe(games)
+
+
+
+
+def add_rolling_features(team_df, window = 10):
+    team_df = team_df.sort_values(["team", "date"]).reset_index(drop=True)
+    grouped = team_df.groupby("team")
+    team_df[f"avg_points_scored_last{window}"] = (
+        grouped["points_scored"]
+        .transform(lambda x: x.shift(1).rolling(window, min_periods=3).mean())
+    )
+    team_df[f"avg_points_allowed_last{window}"] = (
+        grouped["points_allowed"]
+        .transform(lambda x: x.shift(1).rolling(window, min_periods=3).mean())
+    )
+    team_df[f"win_rate_last{window}"] = (
+        grouped["won"]
+        .transform(lambda x: x.shift(1).rolling(window, min_periods=3).mean())
+    )
+    return team_df
+
+if os.path.exists(CSV_PATH):
+    print("Loading data from local copy")
+    df = pd.read_csv(CSV_PATH)
+else:
+    print("No local CSV, loading data from API...")
+    games = fetch_all_games(2023)
+    df = games_to_dataframe(games)
+    df.to_csv(CSV_PATH, index=False)
+
 to_team = to_team_perspective(df)
-#df.to_csv("nba_games_2023.csv", index = False)
-print(to_team.head(10))
-print(f"Saved {len(df)} rows to nba_games_2023.csv")
+to_team = add_rolling_features(to_team, window = 10)
+print(to_team[["team", "date", "avg_points_scored_last10", "avg_points_allowed_last10", "win_rate_last10"]].head(20))
