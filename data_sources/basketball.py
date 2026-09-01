@@ -115,7 +115,7 @@ else:
     df.to_csv(CSV_PATH, index=False)
 
 def build_training_table(team_df, window = 10):
-    feature_cols = ["id", "team", "opponent",
+    feature_cols = ["id","date", "team", "opponent",
                     "is_home", f"avg_points_scored_last{window}",
                     f"avg_points_allowed_last{window}",
                     f"win_rate_last{window}",
@@ -129,14 +129,36 @@ def build_training_table(team_df, window = 10):
 def finalize_training_table(training_df):
     training_df = training_df.copy()
     training_df["home_win"] = training_df["won_home"].astype(int)
+    training_df = training_df.rename(columns={"date_home": "date"})
 
     training_df = training_df.drop(columns = [
-        "is_home_home", "is_home_away", "won_home", "won_away"
+        "is_home_home", "is_home_away", "won_home", "won_away", "date_away"
     ])
 
     training_df = training_df.dropna()
 
     return training_df
+
+feature_columns = [
+    "avg_points_scored_last10_home",
+    "avg_points_allowed_last10_home",
+    "win_rate_last10_home",
+    "avg_points_scored_last10_away",
+    "avg_points_allowed_last10_away",
+    "win_rate_last10_away",
+]
+
+def train_test_split_by_date(final_df, feature_cols, test_size = 0.2):
+    split_idx = int(len(final_df)* (1- test_size))
+    train_df = final_df[:split_idx]
+    test_df = final_df[split_idx:]
+    x_train = train_df[feature_cols]
+    y_train = train_df["home_win"]
+    x_test = test_df[feature_cols]
+    y_test = test_df["home_win"]
+
+    return x_train, y_train, x_test, y_test
+
 
 to_team = to_team_perspective(df)
 to_team = add_rolling_features(to_team, window = 10)
@@ -147,6 +169,7 @@ print(training_df.head())
 print(training_df.columns.tolist())
 
 final_df = finalize_training_table(training_df)
+final_df = final_df.sort_values("date").reset_index(drop=True)
 print(f"Przed dropna: {len(training_df)}, po dropna: {len(final_df)}")
 print(final_df.head())
 print(final_df.columns.tolist())
