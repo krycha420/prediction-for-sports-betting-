@@ -6,7 +6,6 @@ import os
 
 BASE_URL = "https://api.balldontlie.io/v1"
 API_KEY = os.getenv("BALLDONTLIE_API_KEY")
-API_KEY = "aefebbe9-c636-426f-9a3f-b0a16d71d38c"
 CSV_PATH = "nba_games_2023.csv"
 
 
