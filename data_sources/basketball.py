@@ -3,6 +3,12 @@ import time
 import json
 import pandas as pd
 import os
+from dotenv import load_dotenv
+from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.metrics import accuracy_score, roc_auc_score, log_loss
+
+
+load_dotenv()
 
 BASE_URL = "https://api.balldontlie.io/v1"
 API_KEY = os.getenv("BALLDONTLIE_API_KEY")
@@ -162,14 +168,25 @@ def train_test_split_by_date(final_df, feature_cols, test_size = 0.2):
 
 to_team = to_team_perspective(df)
 to_team = add_rolling_features(to_team, window = 10)
-print(to_team[["team", "date", "avg_points_scored_last10", "avg_points_allowed_last10", "win_rate_last10"]].head(20))
 
 training_df = build_training_table(to_team, window=10)
-print(training_df.head())
-print(training_df.columns.tolist())
 
 final_df = finalize_training_table(training_df)
 final_df = final_df.sort_values("date").reset_index(drop=True)
-print(f"Przed dropna: {len(training_df)}, po dropna: {len(final_df)}")
-print(final_df.head())
-print(final_df.columns.tolist())
+
+X_train, y_train,X_test, y_test = train_test_split_by_date(final_df, feature_columns)
+
+print(f"y_train mean: {y_train.mean():.3f}")
+print(f"y_test mean: {y_test.mean():.3f}")
+
+model = HistGradientBoostingClassifier(random_state=42)
+model.fit(X_train, y_train)
+y_pred = model.predict(X_test)
+y_proba = model.predict_proba(X_test)[:, 1]
+
+print(f"Accuracy: {accuracy_score(y_test, y_pred):.3f}")
+print(f"ROC AUC: {roc_auc_score(y_test, y_proba):.3f}")
+print(f"Log loss: {log_loss(y_test, y_proba):.3f}")
+
+y_train_pred = model.predict(X_train)
+print(f"Train accuracy: {accuracy_score(y_train, y_train_pred):.3f}")
