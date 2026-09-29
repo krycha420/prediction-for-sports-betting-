@@ -133,7 +133,7 @@ def build_training_table(team_df, window = 10):
                     "is_home", f"avg_points_scored_last{window}",
                     f"avg_points_allowed_last{window}",
                     f"win_rate_last{window}",
-                    "won"
+                    "won", "rest_days"
                     ]
     home = team_df[team_df["is_home"]==True][feature_cols]
     away = team_df[team_df["is_home"] == False][feature_cols]
@@ -172,6 +172,8 @@ feature_columns = [
     "point_diff_away",
     "strength_gap",
     "win_rate_gap",
+    "rest_days_home",
+    "rest_days_awayqq"
 ]
 
 def train_test_split_by_date(final_df, feature_cols, test_size = 0.2):
