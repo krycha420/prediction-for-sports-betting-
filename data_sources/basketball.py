@@ -12,7 +12,8 @@ load_dotenv()
 
 BASE_URL = "https://api.balldontlie.io/v1"
 API_KEY = os.getenv("BALLDONTLIE_API_KEY")
-CSV_PATH = "nba_games_2023.csv"
+CSV_PATH = "nba_games_2020_2023.csv"
+SEASONS = [2020, 2021, 2022, 2023]
 
 
 
@@ -121,10 +122,9 @@ if os.path.exists(CSV_PATH):
     df = pd.read_csv(CSV_PATH)
 else:
     print("No local CSV, loading data from API...")
-    games = fetch_all_games(2023)
+    games = fetch_multiple_seasons(SEASONS)
     df = games_to_dataframe(games)
     df.to_csv(CSV_PATH, index=False)
-
 def build_training_table(team_df, window = 10):
     feature_cols = ["id","date", "team", "opponent",
                     "is_home", f"avg_points_scored_last{window}",
@@ -145,6 +145,7 @@ def finalize_training_table(training_df):
     training_df = training_df.drop(columns = [
         "is_home_home", "is_home_away", "won_home", "won_away", "date_away"
     ])
+    training_df = training_df.dropna()
     training_df["point_diff_home"] = (
             training_df["avg_points_scored_last10_home"] - training_df["avg_points_allowed_last10_home"]
     )
@@ -153,7 +154,7 @@ def finalize_training_table(training_df):
     )
     training_df["strength_gap"] = training_df["point_diff_home"] - training_df["point_diff_away"]
     training_df["win_rate_gap"] = training_df["win_rate_last10_home"] - training_df["win_rate_last10_away"]
-    training_df = training_df.dropna()
+
 
     return training_df
 
@@ -205,10 +206,9 @@ model = HistGradientBoostingClassifier(
 model.fit(X_train, y_train)
 y_pred = model.predict(X_test)
 y_proba = model.predict_proba(X_test)[:, 1]
+y_train_pred = model.predict(X_train)
 
 print(f"Accuracy: {accuracy_score(y_test, y_pred):.3f}")
 print(f"ROC AUC: {roc_auc_score(y_test, y_proba):.3f}")
 print(f"Log loss: {log_loss(y_test, y_proba):.3f}")
-
-y_train_pred = model.predict(X_train)
 print(f"Train accuracy: {accuracy_score(y_train, y_train_pred):.3f}")
