@@ -73,6 +73,13 @@ def games_to_dataframe(games):
         flattened_game = flatten_game(game)
         data.append(flattened_game)
     return pd.DataFrame(data)
+
+def add_matchup_key(df):
+    df = df.copy()
+    df["matchup_key"] = df.apply(
+        lambda row: "_vs_".join(sorted([row["home_team"], row["visitor_team"]])), axis =1
+    )
+    return df
 def to_team_perspective(df):
     home_rows = df.copy()
     home_rows = home_rows.rename(columns = {
@@ -119,6 +126,8 @@ def add_rest_days(team_df):
     grouped = team_df.groupby("team")["date"]
     team_df["rest_days"] = grouped.diff().dt.days
     return team_df
+def add_head_to_head(team_df, window = 5):
+    team_df = team_df.s
 
 if os.path.exists(CSV_PATH):
     print("Loading data from local copy")
@@ -173,7 +182,7 @@ feature_columns = [
     "strength_gap",
     "win_rate_gap",
     "rest_days_home",
-    "rest_days_awayqq"
+    "rest_days_away"
 ]
 
 def train_test_split_by_date(final_df, feature_cols, test_size = 0.2):
@@ -187,7 +196,8 @@ def train_test_split_by_date(final_df, feature_cols, test_size = 0.2):
 
     return x_train, y_train, x_test, y_test
 
-
+df = add_matchup_key(df)
+print(df[["home_team", "visitor_team", "matchup_key"]].head(10))
 to_team = to_team_perspective(df)
 to_team = add_rolling_features(to_team, window = 10)
 to_team = add_rest_days(to_team)
