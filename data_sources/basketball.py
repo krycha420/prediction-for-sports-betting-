@@ -97,9 +97,6 @@ def to_team_perspective(df):
     return combined
 
 
-
-
-
 def add_rolling_features(team_df, window = 10):
     team_df = team_df.sort_values(["team", "date"]).reset_index(drop=True)
     grouped = team_df.groupby("team")
@@ -115,6 +112,12 @@ def add_rolling_features(team_df, window = 10):
         grouped["won"]
         .transform(lambda x: x.shift(1).rolling(window, min_periods=3).mean())
     )
+    return team_df
+def add_rest_days(team_df):
+    team_df = team_df.sort_values(["team", "date"]).reset_index(drop=True)
+    team_df["date"] = pd.to_datetime(team_df["date"])
+    grouped = team_df.groupby("team")["date"]
+    team_df["rest_days"] = grouped.diff().dt.days
     return team_df
 
 if os.path.exists(CSV_PATH):
@@ -185,6 +188,8 @@ def train_test_split_by_date(final_df, feature_cols, test_size = 0.2):
 
 to_team = to_team_perspective(df)
 to_team = add_rolling_features(to_team, window = 10)
+to_team = add_rest_days(to_team)
+print(to_team[["team", "date", "avg_points_scored_last10", "avg_points_allowed_last10", "win_rate_last10", "rest_days"]].head(20))
 
 training_df = build_training_table(to_team, window=10)
 
