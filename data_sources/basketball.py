@@ -46,7 +46,12 @@ def fetch_all_games(season: int):
             break
 
     return all_games
-
+def fetch_multiple_seasons(seasons):
+    all_games = []
+    for season in seasons:
+        print(f"Pobieram sezon {season}...")
+        all_games.extend(fetch_all_games(season))
+    return all_games
 
 
 def flatten_game(game):
@@ -140,7 +145,14 @@ def finalize_training_table(training_df):
     training_df = training_df.drop(columns = [
         "is_home_home", "is_home_away", "won_home", "won_away", "date_away"
     ])
-
+    training_df["point_diff_home"] = (
+            training_df["avg_points_scored_last10_home"] - training_df["avg_points_allowed_last10_home"]
+    )
+    training_df["point_diff_away"] = (
+            training_df["avg_points_scored_last10_away"] - training_df["avg_points_allowed_last10_away"]
+    )
+    training_df["strength_gap"] = training_df["point_diff_home"] - training_df["point_diff_away"]
+    training_df["win_rate_gap"] = training_df["win_rate_last10_home"] - training_df["win_rate_last10_away"]
     training_df = training_df.dropna()
 
     return training_df
@@ -152,6 +164,10 @@ feature_columns = [
     "avg_points_scored_last10_away",
     "avg_points_allowed_last10_away",
     "win_rate_last10_away",
+    "point_diff_home",
+    "point_diff_away",
+    "strength_gap",
+    "win_rate_gap",
 ]
 
 def train_test_split_by_date(final_df, feature_cols, test_size = 0.2):
@@ -179,7 +195,13 @@ X_train, y_train,X_test, y_test = train_test_split_by_date(final_df, feature_col
 print(f"y_train mean: {y_train.mean():.3f}")
 print(f"y_test mean: {y_test.mean():.3f}")
 
-model = HistGradientBoostingClassifier(random_state=42)
+model = HistGradientBoostingClassifier(
+    random_state=42,
+    max_depth=3,
+    max_iter=100,
+    learning_rate=0.05,
+    min_samples_leaf=20,
+)
 model.fit(X_train, y_train)
 y_pred = model.predict(X_test)
 y_proba = model.predict_proba(X_test)[:, 1]
