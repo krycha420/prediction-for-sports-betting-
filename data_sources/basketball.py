@@ -126,8 +126,14 @@ def add_rest_days(team_df):
     grouped = team_df.groupby("team")["date"]
     team_df["rest_days"] = grouped.diff().dt.days
     return team_df
-def add_head_to_head(team_df, window = 5):
-    team_df = team_df.s
+def add_head_to_head(team_df, window = 3):
+    team_df = team_df.sort_values(["team", "matchup_key", "date"]).reset_index(drop=True)
+    grouped = team_df.groupby(["team", "matchup_key"])["won"]
+
+    team_df[f"h2h_win_rate_last{window}"] = (
+        grouped.transform(lambda x: x.shift(1).rolling(window, min_periods=1).mean())
+    )
+    return team_df
 
 if os.path.exists(CSV_PATH):
     print("Loading data from local copy")
@@ -142,7 +148,7 @@ def build_training_table(team_df, window = 10):
                     "is_home", f"avg_points_scored_last{window}",
                     f"avg_points_allowed_last{window}",
                     f"win_rate_last{window}",
-                    "won", "rest_days"
+                    "won", "rest_days", "h2h_win_rate_last5"
                     ]
     home = team_df[team_df["is_home"]==True][feature_cols]
     away = team_df[team_df["is_home"] == False][feature_cols]
@@ -182,7 +188,9 @@ feature_columns = [
     "strength_gap",
     "win_rate_gap",
     "rest_days_home",
-    "rest_days_away"
+    "rest_days_away",
+    "h2h_win_rate_last5_home",
+    "h2h_win_rate_last5_away",
 ]
 
 def train_test_split_by_date(final_df, feature_cols, test_size = 0.2):
@@ -197,11 +205,12 @@ def train_test_split_by_date(final_df, feature_cols, test_size = 0.2):
     return x_train, y_train, x_test, y_test
 
 df = add_matchup_key(df)
-print(df[["home_team", "visitor_team", "matchup_key"]].head(10))
 to_team = to_team_perspective(df)
 to_team = add_rolling_features(to_team, window = 10)
 to_team = add_rest_days(to_team)
-print(to_team[["team", "date", "avg_points_scored_last10", "avg_points_allowed_last10", "win_rate_last10", "rest_days"]].head(20))
+to_team = add_head_to_head(to_team, window=5)
+print(f"Ile NaN w h2h_win_rate_last5: {to_team['h2h_win_rate_last5'].isna().sum()} z {len(to_team)}")
+
 
 training_df = build_training_table(to_team, window=10)
 
