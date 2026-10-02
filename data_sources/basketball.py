@@ -6,7 +6,7 @@ import os
 from dotenv import load_dotenv
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.metrics import accuracy_score, roc_auc_score, log_loss
-
+from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
 
 load_dotenv()
 
@@ -126,14 +126,14 @@ def add_rest_days(team_df):
     grouped = team_df.groupby("team")["date"]
     team_df["rest_days"] = grouped.diff().dt.days
     return team_df
-def add_head_to_head(team_df, window = 3):
-    team_df = team_df.sort_values(["team", "matchup_key", "date"]).reset_index(drop=True)
-    grouped = team_df.groupby(["team", "matchup_key"])["won"]
-
-    team_df[f"h2h_win_rate_last{window}"] = (
-        grouped.transform(lambda x: x.shift(1).rolling(window, min_periods=1).mean())
-    )
-    return team_df
+# def add_head_to_head(team_df, window = 3):
+#     team_df = team_df.sort_values(["team", "matchup_key", "date"]).reset_index(drop=True)
+#     grouped = team_df.groupby(["team", "matchup_key"])["won"]
+#
+#     team_df[f"h2h_win_rate_last{window}"] = (
+#         grouped.transform(lambda x: x.shift(1).rolling(window, min_periods=1).mean())
+#     )
+#     return team_df
 
 if os.path.exists(CSV_PATH):
     print("Loading data from local copy")
@@ -148,7 +148,7 @@ def build_training_table(team_df, window = 10):
                     "is_home", f"avg_points_scored_last{window}",
                     f"avg_points_allowed_last{window}",
                     f"win_rate_last{window}",
-                    "won", "rest_days", "h2h_win_rate_last5"
+                    "won", "rest_days"
                     ]
     home = team_df[team_df["is_home"]==True][feature_cols]
     away = team_df[team_df["is_home"] == False][feature_cols]
@@ -189,8 +189,6 @@ feature_columns = [
     "win_rate_gap",
     "rest_days_home",
     "rest_days_away",
-    "h2h_win_rate_last5_home",
-    "h2h_win_rate_last5_away",
 ]
 
 def train_test_split_by_date(final_df, feature_cols, test_size = 0.2):
@@ -208,8 +206,6 @@ df = add_matchup_key(df)
 to_team = to_team_perspective(df)
 to_team = add_rolling_features(to_team, window = 10)
 to_team = add_rest_days(to_team)
-to_team = add_head_to_head(to_team, window=5)
-print(f"Ile NaN w h2h_win_rate_last5: {to_team['h2h_win_rate_last5'].isna().sum()} z {len(to_team)}")
 
 
 training_df = build_training_table(to_team, window=10)
@@ -222,19 +218,31 @@ X_train, y_train,X_test, y_test = train_test_split_by_date(final_df, feature_col
 print(f"y_train mean: {y_train.mean():.3f}")
 print(f"y_test mean: {y_test.mean():.3f}")
 
-model = HistGradientBoostingClassifier(
-    random_state=42,
-    max_depth=3,
-    max_iter=100,
-    learning_rate=0.05,
-    min_samples_leaf=20,
-)
-model.fit(X_train, y_train)
-y_pred = model.predict(X_test)
-y_proba = model.predict_proba(X_test)[:, 1]
-y_train_pred = model.predict(X_train)
+param_grid = {
+    "max_depth": [2,3,4,5],
+    "learning_rate": [0.01, 0.05, 0.1],
+    "max_iter": [50, 100, 150],
+    "min_samples_leaf": [10, 20, 30]
+}
 
-print(f"Accuracy: {accuracy_score(y_test, y_pred):.3f}")
-print(f"ROC AUC: {roc_auc_score(y_test, y_proba):.3f}")
-print(f"Log loss: {log_loss(y_test, y_proba):.3f}")
-print(f"Train accuracy: {accuracy_score(y_train, y_train_pred):.3f}")
+tscv = TimeSeriesSplit(n_splits=5)
+
+grid_search = GridSearchCV(
+    estimator=HistGradientBoostingClassifier(random_state=42),
+    param_grid= param_grid,
+    scoring= "roc_auc",
+    cv = tscv,
+    n_jobs= -1
+)
+grid_search.fit(X_train, y_train)
+
+print(f"Najlepsze parametry: {grid_search.best_params_}")
+print(f"Najlepszy ROC AUC (walidacja): {grid_search.best_score_:.3f}")
+
+best_model = grid_search.best_estimator_
+y_pred = best_model.predict(X_test)
+y_proba = best_model.predict_proba(X_test)[:, 1]
+
+print(f"Test accuracy: {accuracy_score(y_test, y_pred):.3f}")
+print(f"Test ROC AUC: {roc_auc_score(y_test, y_proba):.3f}")
+print(f"Test log loss: {log_loss(y_test, y_proba):.3f}")
