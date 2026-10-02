@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.metrics import accuracy_score, roc_auc_score, log_loss
 from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
+from sklearn.calibration import CalibratedClassifierCV
 
 load_dotenv()
 
@@ -242,6 +243,15 @@ print(f"Najlepszy ROC AUC (walidacja): {grid_search.best_score_:.3f}")
 best_model = grid_search.best_estimator_
 y_pred = best_model.predict(X_test)
 y_proba = best_model.predict_proba(X_test)[:, 1]
+calibrated_model = CalibratedClassifierCV(
+    grid_search.best_estimator_,
+    method="isotonic",
+    cv = tscv
+)
+calibrated_model.fit(X_train,y_train)
+
+y_proba_calibrated = calibrated_model.predict_proba(X_test)[:,1]
+print(f"Log loss po kalibracji: {log_loss(y_test, y_proba_calibrated):.3f}")
 
 print(f"Test accuracy: {accuracy_score(y_test, y_pred):.3f}")
 print(f"Test ROC AUC: {roc_auc_score(y_test, y_proba):.3f}")
